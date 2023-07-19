@@ -73,7 +73,7 @@ f.close()
 putty --load "Inkplate10-COM4"
 ```
 2. Power/Boot device (reset button on back or power button next to usb-c connector as applicable)
-3. Example serial debug output when wifi connects, syncs with ntp, fetches data, and displays on e-ink
+3. Example serial debug output on `power-on` when wifi connects, syncs with ntp, fetches data, and displays on e-ink
 ```
 rst:0x1 (POWERON_RESET),boot:0x12 (SPI_FAST_FLASH_BOOT)
 configsip: 0, SPIWP:0xee
@@ -92,5 +92,26 @@ Debug: Finished fetching data
 Debug: Finished reading temperature sensor.
 Debug: Starting final render on display.
 Mono: clean 1690ms (33ms ea), draw 594ms (99ms ea), total 2284ms
+Debug: Going to Sleep
+```
+3. Example from `deepsleep`:
+```
+rst:0x5 (DEEPSLEEP_RESET),boot:0x12 (SPI_FAST_FLASH_BOOT)
+configsip: 0, SPIWP:0xee
+clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+mode:DIO, clock div:2
+load:0x3fff0030,len:4656
+load:0x40078000,len:13284
+ho 0 tail 12 room 4
+load:0x40080400,len:3712
+entry 0x4008064c
+woke from a deep sleep
+connecting to network...
+network config: ('10.0.20.72', '255.255.255.0', '10.0.20.1', '8.8.8.8')
+Current Time: (2023, 7, 19, 2, 13, 42, 48, 876779)
+Debug: Finished fetching data
+Debug: Finished reading temperature sensor.
+Debug: Starting final render on display.
+Partial: draw 599ms (119ms/frame 145us/row) (y=0..825)
 Debug: Going to Sleep
 ```
