@@ -277,6 +277,10 @@ def main():
     #rotation int 0 = none 1 = 90deg clockwise rotation, 2 = 180deg, 3 = 270deg
     display.setRotation(0)
     
+    #if you start getting bleeding on the display due to killing power during a draw operation, uncomment these two lines temporarily, or execute out of band of this script.
+    #display.clearDisplay()
+    #display.display()
+
     # Set font size
     display.setTextSize(3)
 
@@ -289,7 +293,10 @@ def main():
         cnt += 28
     print ("Debug: Starting final render on display.")
     # Actually update display with new data
-    display.display()
+    # display.display() is slow, use display.partialUpdate() when possible
+    #display.display()
+    display.partialUpdate()
+    display.einkOff()
     # Deep Sleep
     sleepnow()
 
