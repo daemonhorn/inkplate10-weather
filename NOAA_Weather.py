@@ -44,15 +44,15 @@ def setup_rtc():
     import time
     rtc = RTC()
   
-    curTime = rtc.datetime()    # get the date and time in UTC
-    localTime = time.localtime()  # Another clock source
+    utcTime = rtc.datetime()    # get the date and time in UTC
+    localtimeOffset = -4
     #print("Debug times: %s,%s" % (str(localTime),str(curTime)))
 
     ntptime.host = '1.north-america.pool.ntp.org'
     ntptime.timeout = 5
     
     #If the year is 2000, rtc is not initialized, use ntp
-    if curTime[0] == 2000:
+    if utcTime[0] == 2000:
         print("Debug: Fetching time from ntp server")
         try: 
             ntptime.settime() # set the rtc datetime from the remote server
@@ -60,10 +60,18 @@ def setup_rtc():
             print("Transient error setting the time from ntp, retrying with timeout=30")
             # Setting both the host and timeout to different values to improve success rate on unreachable ntp server
             ntptime.host = '2.north-america.pool.ntp.org'
-            ntptime.timeout = 10
-            ntptime.settime() # set the rtc
-    curTime = str(rtc.datetime())    # get the date and time in UTC
-    print("Current Time: %s" % curTime)
+            ntptime.timeout = 30
+            try:
+                ntptime.settime() # set the rtc
+            except:
+                print("Fatal error attempting to ntp time sync, sleeping...")
+                sleepnow()
+        date_time = list(rtc.datetime())
+        date_time[4] = date_time[4] + localtimeOffset
+        date_time = tuple(date_time)
+        rtc.datetime(date_time)
+    localTimeStr = str(time.localtime())
+    print("Current local time: %s" % localTimeStr)
     
 
 # Function that puts the esp32 into deepsleep mode
@@ -72,7 +80,7 @@ def sleepnow():
         
     # put the device to sleep
     print("Debug: Going to Sleep")
-    machine.deepsleep(600000)
+    machine.deepsleep(60000)
     # After wake from deepsleep state, boots and runs boot.py, main.py
     # This script is generally saved as main.py on esp32 spiflash filesystem
     
@@ -156,9 +164,17 @@ def http_get(url):
 
 def parseJSON(response):
     import json
+    import time
     
     # Following code is currently very NOAA weather API specific, no attempt has been made to abstract here.
-    
+    HTTP_1 = response.find("HTTP/1.0")
+    HTTP_RESULT = response.find(" 200 OK\r\n",7)
+    if  HTTP_1 == 0 and HTTP_RESULT == 8:
+        print("Found 'HTTP/1.0 200 OK' Response.")
+    else:
+        print("Fatal failure during HTTP GET (%s), going to sleep..." % response.split("\n")[0])
+        sleepnow()
+        #raise ValueError("Web Server responded with failure code. (%s)" % response.split("\n")[0])
     jsondata = ""
     # BUG: Hacky way to parse through raw HTTP socket response and remove all non-JSON data
     for x in response.split("\n"):
@@ -173,8 +189,11 @@ def parseJSON(response):
     jsonproperties = jsonelements["properties"]
     #print("Updated: %s" % jsonproperties["updated"])
     #print("Detailed Forecast: %s" % jsonproperties["periods"][1]["detailedForecast"])
+    timehour = str(time.localtime()[3])
+    timeminute = str(time.localtime()[4])
+    displaytext = "Current Time: " + timehour + ":" + timeminute + "  "
 
-    displaytext =  "Updated: %s\n\n" % jsonproperties["updated"]
+    displaytext +=  "Updated Data: %s\n\n" % jsonproperties["updated"]
 
     ################ NOAA JSON DATA ##########################################
     #Period 0 is Current period, 1 is +12 hours, etc.
@@ -240,9 +259,24 @@ def parseJSON(response):
 def __init__():
     import machine
     import esp
-    esp.osdebug(0)
-    if machine.reset_cause() == machine.DEEPSLEEP_RESET:
-        print("woke from a deep sleep")
+    esp.osdebug(None)
+    # Set speed to something slower than full speed to save power.
+    machine.freq(80000000)
+    reset_cause = machine.reset_cause()
+
+    if reset_cause == machine.DEEPSLEEP_RESET:
+        print("Woke up from a deep sleep")
+    elif reset_cause == machine.PWRON_RESET:
+        print("Power-on or Reset")
+    elif reset_cause == machine.HARD_RESET:
+        print("Hard Reset")
+    elif reset_cause == machine.SOFT_RESET:
+        print("Soft Reset")
+    else:
+        print("Unknown reset cause: %d" % machine.reset_cause())
+
+    print("Wake Reason: %d" % machine.wake_reason())
+    
     do_connect()
     setup_rtc()
     
@@ -265,6 +299,8 @@ def main():
     # Initialise our Inkplate object
     display = Inkplate(Inkplate.INKPLATE_1BIT)
     display.begin()
+    # Make a copy of the framebuffer
+    display.ipp.start()
     # Get display temperature from built-in sensor, requires calling display.display() or display.einkOn() first.  .display() is slow, use .einkOn()
     display.einkOn()
     temperature_C = display.readTemperature()
@@ -294,8 +330,9 @@ def main():
     print ("Debug: Starting final render on display.")
     # Actually update display with new data
     # display.display() is slow, use display.partialUpdate() when possible
-    #display.display()
-    display.partialUpdate()
+    # 
+    display.display()
+    #display.partialUpdate()
     display.einkOff()
     # Deep Sleep
     sleepnow()
