@@ -189,9 +189,15 @@ def parseJSON(response):
     jsonproperties = jsonelements["properties"]
     #print("Updated: %s" % jsonproperties["updated"])
     #print("Detailed Forecast: %s" % jsonproperties["periods"][1]["detailedForecast"])
-    timehour = str(time.localtime()[3])
-    timeminute = str(time.localtime()[4])
-    displaytext = "Current Time: " + timehour + ":" + timeminute + "  "
+    timehour = time.localtime()[3]
+    if timehour > 12:
+        timehour -= 12
+        timesuffix = "pm"
+    else:
+        timesuffix = "am"
+    timehourStr = str(timehour)
+    timeminuteStr = str(time.localtime()[4])
+    displaytext = "Current Time: " + timehourStr + ":" + timeminuteStr + " " + timesuffix + " "
 
     displaytext +=  "Updated Data: %s\n\n" % jsonproperties["updated"]
 
