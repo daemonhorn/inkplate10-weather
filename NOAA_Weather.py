@@ -111,8 +111,12 @@ def do_connect():
 # Does a HTTP/HTTPS GET request
 # More info here: https://docs.micropython.org/en/latest/esp8266/tutorial/network_tcp.html
 def http_get(url):
-    import usocket
-    import ussl
+    import usocket as socket
+    import ussl as ssl
+    af = socket.AF_INET
+    proto = socket.IPPROTO_TCP
+    socktype = socket.SOCK_STREAM
+    socket_timeout = 10 # seconds
 
     res = ""
     scheme, _, host, path = url.split("/", 3)
@@ -126,21 +130,32 @@ def http_get(url):
     else:
         raise ValueError("Unsupported URI scheme (%s) in url (%s), only http/https supported" % (scheme,url))
     
-    ai = usocket.getaddrinfo(host, port, 0, usocket.SOCK_STREAM)
-    ai = ai[0]
-    s = usocket.socket(ai[0], ai[1], ai[2])
-    try:
-        s.connect(ai[-1])
-    except:
-        print("Failed to connect, retrying...")
-        time.sleep(10)
-        s.connect(ai[-1])
+    for addressinfo in socket.getaddrinfo(host, port, af, socktype, proto):
+        af, socktype, proto, cname, sockaddr = addressinfo
+        print(".getaddrinfo() complete: (%s)" % str(addressinfo))
+        try:
+            s = socket.socket(af, socktype, proto)
+        except OSError as msg:
+            s = None
+            continue
+        s.settimeout(socket_timeout)
+        try:
+            s.connect(sockaddr)
+        except OSError as msg:
+            s.close()
+            s = None
+            continue
+        break
+    if s is None:
+        print("Failed to connect, Going to sleep...")
+        sleepnow()
     
     if scheme == "https:":
         try:
-            s = ussl.wrap_socket(s, server_hostname=host)
+            s = ssl.wrap_socket(s, server_hostname=host)
         except: 
-            s = ussl.wrap_socket(s, server_hostname=host)
+            print("Failed to wrap socket in ssl, Going to sleep...")
+            sleepnow()
         
     buffer =  "GET /%s HTTP/1.0\r\n" % (path)
     buffer += "Host: %s\r\n" % (host)
@@ -149,10 +164,16 @@ def http_get(url):
     # HTTP requests must end in an extra CRLF (aka \r\n)
     buffer += "\r\n"
 #    print("Debug HTTP REQUEST: \r\n%s" % (buffer))
-    
-    s.write(bytes(buffer, "utf8"))
+    try:
+        s.write(bytes(buffer, "utf8"))
+    except:
+        print("Failed to send GET request, Going to sleep...")
+        sleepnow()
     while True:
-        data = s.read(1000)
+        try:
+            data = s.read(1000)
+        except:
+            sleepnow()
         #print("data: %s" % str(data))
         if data:
             res += str(data, "utf8")
@@ -267,7 +288,7 @@ def __init__():
     import esp
     esp.osdebug(None)
     # Set speed to something slower than full speed to save power.
-    machine.freq(80000000)
+    #machine.freq(80000000)
     reset_cause = machine.reset_cause()
 
     if reset_cause == machine.DEEPSLEEP_RESET:
@@ -312,10 +333,11 @@ def main():
     temperature_C = display.readTemperature()
     print ("Debug: Finished reading temperature sensor.")
     temperature_F = (temperature_C * 1.8) + 32
-    inside_temp = str(temperature_F)  
+    inside_temp = str(temperature_F)
+    battery = display.readBattery()
     #print("inside temp: %s" % inside_temp)
-    displaytext += "Current Inside Temperature: %s F\n" % inside_temp
-
+    displaytext += "Current Inside Temperature: %s F  " % inside_temp
+    displaytext += "Battery Voltage: %s" % str(battery)
     #rotation int 0 = none 1 = 90deg clockwise rotation, 2 = 180deg, 3 = 270deg
     display.setRotation(0)
     
