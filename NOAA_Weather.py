@@ -366,7 +366,7 @@ def main(reset_cause):
     battery = display.readBattery(fudge_factor = 0.92)
     #print("inside temp: %s" % inside_temp)
     displaytext += "Current Inside Temperature: %s F  " % inside_temp
-    displaytext += "Battery Voltage: %s" % str(battery)
+    displaytext += "Battery: %s V" % "{:,.2f}".format(battery)
     #rotation int 0 = none 1 = 90deg clockwise rotation, 2 = 180deg, 3 = 270deg
     display.setRotation(0)
     
