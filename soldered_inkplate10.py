@@ -151,13 +151,14 @@ class _Inkplate:
 
     # Read the battery voltage. Note that the result depends on the ADC calibration, and be a bit off.
     @classmethod
-    def read_battery(cls):
-        cls.VBAT_EN.digitalWrite(0)
+    def read_battery(cls,fudge_factor = 1):
+        cls.VBAT_EN.digitalWrite(1)
         # Probably don't need to delay since Micropython is slow, but we do it anyway
         time.sleep_ms(1)
         value = cls.VBAT.read()
-        cls.VBAT_EN.digitalWrite(1)
-        result = (value / 4095.0) * 1.1 * 3.548133892 * 2
+        #print("Debug: VBAT.read() = (%d)" % value)
+        cls.VBAT_EN.digitalWrite(0)
+        result = (value / 4095.0) * 1.1 * 3.548133892 * 2 * fudge_factor
         return result
 
     # Read panel temperature. I varies +- 2 degree
@@ -824,8 +825,8 @@ class Inkplate:
     def einkOff(self):
         _Inkplate.power_off()
 
-    def readBattery(self):
-        return _Inkplate.read_battery()
+    def readBattery(self,fudge_factor=1):
+        return _Inkplate.read_battery(fudge_factor)
 
     def readTemperature(self):
         return _Inkplate.read_temperature()

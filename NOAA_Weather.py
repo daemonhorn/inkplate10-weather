@@ -363,7 +363,7 @@ def main(reset_cause):
     print ("Debug: Finished reading temperature sensor.")
     temperature_F = (temperature_C * 1.8) + 32
     inside_temp = str(temperature_F)
-    battery = display.readBattery()
+    battery = display.readBattery(fudge_factor = 0.92)
     #print("inside temp: %s" % inside_temp)
     displaytext += "Current Inside Temperature: %s F  " % inside_temp
     displaytext += "Battery Voltage: %s" % str(battery)
