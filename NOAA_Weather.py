@@ -57,10 +57,10 @@ def setup_rtc():
         try: 
             ntptime.settime() # set the rtc datetime from the remote server
         except:
-            print("Transient error setting the time from ntp, retrying with timeout=30")
+            print("Transient error setting the time from ntp, retrying with timeout=10")
             # Setting both the host and timeout to different values to improve success rate on unreachable ntp server
             ntptime.host = '2.north-america.pool.ntp.org'
-            ntptime.timeout = 30
+            ntptime.timeout = 10
             try:
                 ntptime.settime() # set the rtc
             except:
@@ -79,6 +79,7 @@ def sleepnow():
     import machine
         
     # put the device to sleep
+    do_connect("Down")
     print("Debug: Going to Sleep")
     machine.deepsleep(60000)
     # After wake from deepsleep state, boots and runs boot.py, main.py
@@ -87,11 +88,22 @@ def sleepnow():
     
 # Function which connects to WiFi
 # More info here: https://docs.micropython.org/en/latest/esp8266/tutorial/network_basics.html
-def do_connect():
+def do_connect(stateDesired = "Up"):
     import network
     import btree
+    countrycode = "US" # https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2
+    hostname = "ink10-esp32-mpy" # Used during DHCP request, maximum 15 bytes for some reason
+    wifi_phymode = network.MODE_11N # https://docs.micropython.org/en/latest/library/network.html#network.phy_mode
 
+    network.country(countrycode)
+    network.hostname(hostname)
+    network.phy_mode(wifi_phymode)
     sta_if = network.WLAN(network.STA_IF)
+
+    if stateDesired == "Down":
+        print("Debug: Disconnecting WLAN")
+        return sta_if.disconnect()
+
     if not sta_if.isconnected():
         # Assumes that btree database with 'wifi_data' filename exists with these two values
         f = open("wifi_data", "r+b")
@@ -106,6 +118,7 @@ def do_connect():
         sta_if.connect(ssid, password)
         while not sta_if.isconnected():
             pass
+
     print("network config:", sta_if.ifconfig())
 
 # Does a HTTP/HTTPS GET request
@@ -132,7 +145,7 @@ def http_get(url):
     
     for addressinfo in socket.getaddrinfo(host, port, af, socktype, proto):
         af, socktype, proto, cname, sockaddr = addressinfo
-        print(".getaddrinfo() complete: (%s)" % str(addressinfo))
+        #print(".getaddrinfo() complete: (%s)" % str(addressinfo))
         try:
             s = socket.socket(af, socktype, proto)
         except OSError as msg:
@@ -191,7 +204,7 @@ def parseJSON(response):
     HTTP_1 = response.find("HTTP/1.0")
     HTTP_RESULT = response.find(" 200 OK\r\n",7)
     if  HTTP_1 == 0 and HTTP_RESULT == 8:
-        print("Found 'HTTP/1.0 200 OK' Response.")
+        print("Debug: 'HTTP/1.0 200 OK' Response.")
     else:
         print("Fatal failure during HTTP GET (%s), going to sleep..." % response.split("\n")[0])
         sleepnow()
@@ -211,13 +224,19 @@ def parseJSON(response):
     #print("Updated: %s" % jsonproperties["updated"])
     #print("Detailed Forecast: %s" % jsonproperties["periods"][1]["detailedForecast"])
     timehour = time.localtime()[3]
+    timeminute = time.localtime()[4]
+    timeminuteStr = str(timeminute)
     if timehour > 12:
         timehour -= 12
         timesuffix = "pm"
+    elif timehour == 0:
+        timehour = 12;
+        timesuffix = "am"
     else:
         timesuffix = "am"
+    if len(timeminuteStr) < 2:
+        timeminuteStr = "0" + timeminuteStr
     timehourStr = str(timehour)
-    timeminuteStr = str(time.localtime()[4])
     displaytext = "Current Time: " + timehourStr + ":" + timeminuteStr + " " + timesuffix + " "
 
     displaytext +=  "Updated Data: %s\n\n" % jsonproperties["updated"]
@@ -306,12 +325,13 @@ def __init__():
     
     do_connect()
     setup_rtc()
-    
+    return reset_cause  # pass this on to caller so that it can be referenced later
     
     
 
-def main():
+def main(reset_cause):
     from soldered_inkplate10 import Inkplate
+    import machine
     
     #print ("Debug: Starting fetching data")
     #response = http_get("http://micropython.org/ks/test.html")
@@ -326,8 +346,17 @@ def main():
     # Initialise our Inkplate object
     display = Inkplate(Inkplate.INKPLATE_1BIT)
     display.begin()
+
+    #if you start getting bleeding on the display due to killing at the wrong, time just power cycle and will do a clearDisplay() then display()
+    if reset_cause == machine.PWRON_RESET:
+        print("Debug: Clearing Display of artifacts after power on")
+        display.fillScreen(1)
+        display.clearDisplay()
+        display.display()
+        display.clean()
+
     # Make a copy of the framebuffer
-    display.ipp.start()
+    #display.ipp.start()
     # Get display temperature from built-in sensor, requires calling display.display() or display.einkOn() first.  .display() is slow, use .einkOn()
     display.einkOn()
     temperature_C = display.readTemperature()
@@ -341,10 +370,6 @@ def main():
     #rotation int 0 = none 1 = 90deg clockwise rotation, 2 = 180deg, 3 = 270deg
     display.setRotation(0)
     
-    #if you start getting bleeding on the display due to killing power during a draw operation, uncomment these two lines temporarily, or execute out of band of this script.
-    #display.clearDisplay()
-    #display.display()
-
     # Set font size
     display.setTextSize(3)
 
@@ -368,5 +393,4 @@ def main():
 
 # Start of script
 
-__init__()
-main()
+main(__init__())
