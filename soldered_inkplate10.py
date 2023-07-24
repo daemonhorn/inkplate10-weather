@@ -158,6 +158,9 @@ class _Inkplate:
         value = cls.VBAT.read()
         #print("Debug: VBAT.read() = (%d)" % value)
         cls.VBAT_EN.digitalWrite(0)
+        # Calculate the voltage using the following formula
+        # 1.1V is internal ADC reference of ESP32, 3.548133892 is 11dB in linear scale (Analog signal is attenuated by 11dB before ESP32 ADC input)
+        # This is still off by some factor, so allow option parm for adjustment
         result = (value / 4095.0) * 1.1 * 3.548133892 * 2 * fudge_factor
         return result
 
