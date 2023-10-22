@@ -38,7 +38,7 @@
 
 
 # Function to init Realtime Clock, and sync with NTP server
-def setup_rtc():
+def setup_rtc(force=False):
     from machine import RTC
     import ntptime
     import time
@@ -49,23 +49,24 @@ def setup_rtc():
     #print("Debug times: %s,%s" % (str(localTime),str(curTime)))
 
     ntptime.host = '1.north-america.pool.ntp.org'
-    ntptime.timeout = 5
+    ntptime.timeout = 10
     
     #If the year is 2000, rtc is not initialized, use ntp
-    if utcTime[0] == 2000:
+    # or if someone passed in a force flag set to True
+    if utcTime[0] == 2000 or force == True:
         print("Debug: Fetching time from ntp server")
         try: 
             ntptime.settime() # set the rtc datetime from the remote server
         except:
-            print("Transient error setting the time from ntp, retrying with timeout=10")
+            print("Transient error setting the time from ntp, retrying with longer timeout.")
             # Setting both the host and timeout to different values to improve success rate on unreachable ntp server
-            ntptime.host = '2.north-america.pool.ntp.org'
-            ntptime.timeout = 10
+            ntptime.host = '3.north-america.pool.ntp.org'
+            ntptime.timeout = 15
             try:
-                ntptime.settime() # set the rtc
+                ntptime.settime()
             except:
                 print("Fatal error attempting to ntp time sync, sleeping...")
-                sleepnow()
+                sleepnow(ms=5000)
         date_time = list(rtc.datetime())
         date_time[4] = date_time[4] + localtimeOffset
         date_time = tuple(date_time)
@@ -75,13 +76,13 @@ def setup_rtc():
     
 
 # Function that puts the esp32 into deepsleep mode
-def sleepnow():
+def sleepnow(ms=600000):
     import machine
         
     # put the device to sleep
     do_connect("Down")
-    print("Debug: Going to Sleep")
-    machine.deepsleep(60000)
+    print("Debug: Going to Sleep for:", ms, "(ms)")
+    machine.deepsleep(ms)
     # After wake from deepsleep state, boots and runs boot.py, main.py
     # This script is generally saved as main.py on esp32 spiflash filesystem
     
@@ -324,7 +325,7 @@ def __init__():
     print("Wake Reason: %d" % machine.wake_reason())
     
     do_connect()
-    setup_rtc()
+    setup_rtc(force=True)
     return reset_cause  # pass this on to caller so that it can be referenced later
     
     
@@ -351,9 +352,11 @@ def main(reset_cause):
     if reset_cause == machine.PWRON_RESET:
         print("Debug: Clearing Display of artifacts after power on")
         display.fillScreen(1)
+        display.display()
         display.clearDisplay()
         display.display()
         display.clean()
+        sleepnow(ms = 1000)
 
     # Make a copy of the framebuffer
     #display.ipp.start()
